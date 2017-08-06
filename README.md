@@ -3,7 +3,7 @@
 *  - react/webpack
 *  - google chart/map
 
-![alt text](http://url/to/img.png)
+![alt text](https://github.com/JeanGamain/react-global-heatmap/blob/edd7ce106eae514dfd3efb339b35da61ecefaa41/preview.png?raw=true)
 
 # setup
 * `git clone git@github.com:JeanGamain/react-global-heatmap.git`
