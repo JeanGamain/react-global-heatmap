@@ -23,8 +23,9 @@ class GlobalHeatMap extends React.Component {
     this.initializeMap = this.initializeMap.bind(this);
     this.refreshMap = this.refreshMap.bind(this);
     this.getData = this.getData.bind(this);
-    //this. = this..bind(this);
-
+    this.handleData = this.handleData.bind(this);
+    this.selectCountry = this.selectCountry.bind(this);
+    this.unselectCountry = this.unselectCountry.bind(this);
     //this. = this..bind(this);
   }
 
@@ -33,13 +34,14 @@ class GlobalHeatMap extends React.Component {
     google.maps.event.addDomListener(window, 'load', this.initializeMap);
     google.charts.load('current', {packages:['corechart', 'table', 'gauge', 'controls', 'line']});
 
+    let my = this;
     google.charts.setOnLoadCallback(function () {
       // query all country
-      getData('SELECT Country FROM ' + fusionTableId + ' GROUP BY Country', function (response) {
-        this.state.country = response.rows;
-        this.setState(this.state);
+      my.getData('SELECT Country FROM ' + fusionTableId + ' GROUP BY Country', function (response) {
+        my.state.country = response.rows.map((country) => ({ name: country[0], selected: false }));
+        my.setState(my.state);
       });
-      refreshData();
+      my.refreshData();
     });
   }
 
@@ -57,22 +59,126 @@ class GlobalHeatMap extends React.Component {
   }
 
   handleData(response){
+    let dashboard = new google.visualization.Dashboard(
+      document.getElementById('chartRangeFilter_dashboard')
+    );
 
+    let dateRangeControl = new google.visualization.ControlWrapper({
+      'controlType': 'ChartRangeFilter',
+      'containerId': 'chartRangeFilter_control_div',
+      'options': {
+        // Filter by the date axis.
+        'filterColumnIndex': 0,
+        'ui': {
+          'chartType': 'LineChart',
+          'chartOptions': {
+            'chartArea': {'width': '90%'},
+
+          },
+          // 1 month in milliseconds = 24 * 60 * 60 * 1000 = 2 628 002 880
+        }
+      },
+      // Initial range
+      'state': {'range': {'start': new Date(1743, 1, 1), 'end': new Date(2013, 1, 1)}}
+    });
+
+    let chart = new google.visualization.ChartWrapper({
+      'chartType': 'LineChart',
+      'containerId': 'chartRangeFilter_chart_div',
+      'options': {
+        // Use the same chart area width as the control for axis alignment.
+        'legend': {position: 'none'},
+        'chartArea': {'height': '80%', 'width': '90%'},
+        'hAxis': {'slantedText': true},
+        'vAxis': {'viewWindow': {'min': -5, 'max': 35}},
+      },
+      // Convert the first column from 'date' to 'string'.
+      colors: ['#a52714', '#097138'],
+    });
+
+    let data = new google.visualization.DataTable();
+    data.addColumn('date', 'Date');
+    let c = 0;
+    this.state.country.map((country) => {
+      c += country.selected;
+      return (country.selected) ?
+        data.addColumn('number', country.name + ' temperature')
+        : '';
+      });
+
+    if (c === 0)
+      data.addColumn('number', 'Temperature');
+
+    let cleanRows = [];
+    for (let i = 0; i < response.rows.length ; ++i) {
+      if (c === 0) {
+        response.rows[i][1] = Number(response.rows[i][1]);
+        response.rows[i][2] /= response.rows[i][1];
+        cleanRows.push([
+          new Date(response.rows[i][0]),
+          response.rows[i][2]
+        ]);
+      } else {
+        let row = [
+          new Date(response.rows[i][0])
+        ];
+        let j = i;
+        for (let k = 0; k < this.state.country.length; ++k) {
+          for (i = j; i < response.rows.length && response.rows[j][0] === response.rows[i][0] && response.rows[i][2] !== this.state.country[k].name; ++i);
+          if (i < response.rows.length && response.rows[i][2] === this.state.country[k].name && response.rows[j][0] === response.rows[i][0])
+            row.push((response.rows[i][1] === "NaN") ? undefined : response.rows[i][1]);
+          else
+            row.push(undefined);
+        }
+        cleanRows.push(row);
+      }
+    }
+    // point predict
+    if (c != 0) {
+      for (let i = 0; i < cleanRows.length; ++i) {
+        for (let j = 1; j < cleanRows[i].length; ++j) {
+          if (cleanRows[i][j] === undefined) {
+            for (let k = i + 1; k < this.state.country.length && cleanRows[k][j] === undefined; ++k);
+            if (k < cleanRows.length) {
+              if (i !== 0) {
+                let diffDayStart = moment(cleanRows[i][0]).diff(moment(cleanRows[i - 1][0]), 'days') * -1;
+                let diffDayEnd = moment(cleanRows[i][0]).diff(moment(cleanRows[k][0]), 'days');
+                cleanRows[i][j] = (cleanRows[i - 1][j] * diffDayStart + cleanRows[k][j] * diffDayEnd) / (diffDayStart + diffDayEnd);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    data.addRows(cleanRows);
+
+    dashboard.bind(dateRangeControl, chart);
+    dashboard.draw(data);
+    google.visualization.events.addListener(dateRangeControl, 'statechange', function (e){
+      let start = moment(dateRangeControl.getState().range.start);
+      let end = moment(dateRangeControl.getState().range.end);
+      this.state.dateRangeStart = start.format('YYYY MMM D');
+      this.state.dateRangeStop = end.format('YYYY MMM D');
+      this.setState(this.state);
+    });
+    this.state.canRefresh = true;
+    this.setState(this.state);
   }
 
   refreshMap() {
-    var dateRange = getSqlDateRange();
-    var countryFilter = getSqlCountrySelector();
-    var mapDiv = document.getElementById('googft-mapCanvas');
+    let dateRange = this.getSqlDateRange();
+    let countryFilter = this.getSqlCountrySelector();
+    let mapDiv = document.getElementById('googft-mapCanvas');
 
-    map = new google.maps.Map(mapDiv, {
+    let map = new google.maps.Map(mapDiv, {
       center: new google.maps.LatLng(48.866667, 2.333333),
       zoom: 5,
       streetViewControl: false,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     });
 
-    layer = new google.maps.FusionTablesLayer({
+    let layer = new google.maps.FusionTablesLayer({
       map: map,
       heatmap: { enabled: false },
       query: {
@@ -97,11 +203,10 @@ class GlobalHeatMap extends React.Component {
   }
 
   getSqlCountrySelector() {
-    return (
+    return (this.state.country.length === 0) ?  '' : (
       ' Country IN (' +
-      this.state.country.map((country, i) => (
-        "'" + country + "'" + (i + 1 === this.state.country.length) ? '' : ', '
-      )) + ') '
+      this.state.country.map((country, i) => ("'" + country.name.replace("'","") + "'")).join(',')
+      + ') '
     );
   }
 
@@ -110,15 +215,25 @@ class GlobalHeatMap extends React.Component {
     this.setState(this.state);
     const dateRange = this.getSqlDateRange();
     const countryFilter = this.getSqlCountrySelector();
-    var where = dateRange + ((countryFilter) ? ((dateRange) ? ' AND ' : '') + countryFilter : '');
-    var sqlQuery;
+    let where = dateRange + ((countryFilter) ? ((dateRange) ? ' AND ' : '') + countryFilter : '');
+    let sqlQuery;
     if (countryFilter === '')
       sqlQuery = 'SELECT dt as col0, COUNT() as rowCount, SUM(AverageTemperature) as temperature FROM ' + fusionTableId + ((dateRange != '') ? ' WHERE ' + dateRange : '') + ' GROUP BY dt ORDER BY dt DESC LIMIT 800';
     else
       sqlQuery = 'SELECT dt as col0, AverageTemperature as temperature, Country FROM ' + fusionTableId + ((where != '') ? ' WHERE ' + where : '') + ' ORDER BY dt DESC LIMIT 800';
 
-    this.getData(sqlQuery, dataHandler);
+    this.getData(sqlQuery, this.handleData);
     this.refreshMap();
+  }
+
+  selectCountry(e) {
+    this.state.country[e.target.value].selected = true;
+    this.setState(this.state);
+  }
+
+  unselectCountry(i) {
+    this.state.country[i].selected = false;
+    this.setState(this.state);
   }
 
   render() {
@@ -134,60 +249,71 @@ class GlobalHeatMap extends React.Component {
       { min: 32, max: 70, color: "#ff0000"}
     ];
 
+    //className="googft-legend-range"
     const tempetureRange = tempetureRangeConfig.map(range => (
       <div>
-        <span className="googft-legend-swatch" style={Object.assign({}, styles.legendSwatch, {backgroundColor: range.color})}/>
-        <span className="googft-legend-range" style={styles.legendRange}>{range.min} to {range.max}</span>
+        <span className={styles.legendSwatch} style={{backgroundColor: range.color}}/>
+        <span className={styles.legendRange}>{range.min} to {range.max}</span>
       </div>
     ));
 
-    const countryOption = this.state.country.map(country => (
-      <option value={country}>{country}</option>
+    const countryOption = this.state.country.map((country, i) => ((country.selected == false) ?
+        <option value={i}>{country.name}</option>
+        : ''
+    ));
+
+    const selectedCountry =  this.state.country.map((country, i) => ((country.selected) ?
+        <span className={styles.countryTags}>
+          {country.name}
+          <span className={styles.countryTagsRemove} onClick={() => {this.unselectCountry(i)}}>x</span>
+        </span>
+      : ''
     ));
 
     return (
-      <div style={styles.section}>
+
+      <div className={styles.section}>
 
         <h1>Global Temperatures by country from 1743 to 2013.</h1>
-        <div>
-          <div id="googft-mapCanvas" style={styles.mapCanvas} />
-          <input id="googft-legend-open" style={{display: 'none'}} type="button" value="Legend" />
-          <div id="googft-legend">
-            <p id="googft-legend-title">AverageTemperature</p>
-            <div>
-              { tempetureRange }
-            </div>
-            <input id="googft-legend-close" style={{display: 'none'}} type="button" value="Hide" />
+        <div id="googft-mapCanvas" className={styles.mapCanvas} />
+        <input id="googft-legend-open" style={{display: 'none'}} type="button" value="Legend" />
+        <div id="googft-legend" className={styles.googftLegend}>
+          <p id="googft-legend-title">Temperature range:</p>
+          <div>
+            { tempetureRange }
           </div>
+          <input id="googft-legend-close" style={{display: 'none'}} type="button" value="Hide" />
         </div>
 
-        <div style={styles.controls}>
+        <div className={styles.controls}>
           <span id="dateRangeLabel">
-            From: <input id="dateRangeStart" style={styles.dateRange} type="text" value={this.state.dateRangeStart}/>
-            to <input style={styles.dateRange} id="dateRangeEnd" type="text" value={this.state.dateRangeStop}/>
+            From: <input id="dateRangeStart" className={styles.dateRange} type="text" defaultValue={this.state.dateRangeStart}/>
+            {' '}to <input className={styles.dateRange} id="dateRangeEnd" type="text" defaultValue={this.state.dateRangeStop}/>
           </span><br />
           <label for="countrySelector">
             Country:
           </label>
-          <select id="countrySelector" onChange="changeCountrySelector(this)">
-            <option value=""></option>
+          <select id="countrySelector" onChange={this.selectCountry} >
+            <option value=""/>
             {countryOption}
-          </select>>
-          <div id="countrySelected" style={styles.countrySelected}/>
+          </select>
+          <div id="countrySelected" className={styles.countrySelected}>
+            {selectedCountry}
+          </div>
           <br />
-          <input id="refreshButton" type="button" onClick="refreshData()" value="Refresh" disabled={this.state.canRefresh}/>
+          <input id="refreshButton" type="button" onClick={this.refreshData} value="Refresh" disabled={!this.state.canRefresh}/>
         </div>
 
-        <div style={styles.dashboard}>
+        <div id="chartRangeFilter_dashboard" className={styles.dashboard}>
           <table className="columns">
             <tr>
               <td>
-                <div style={styles.chart}></div>
+                <div className={styles.chart}/>
               </td>
             </tr>
             <tr>
               <td>
-                <div style={styles.controls}></div>
+                <div className={styles.controlSection}/>
               </td>
             </tr>
           </table>

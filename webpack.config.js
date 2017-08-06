@@ -5,10 +5,20 @@ module.exports = {
     './src/index.js'
   ],
   module: {
-    loaders: [
+    rules: [
       {
         test: /\.css$/,
-        use: [ 'style-loader', 'css-loader' ]
+        use: [
+          { loader: 'style-loader' },
+          {
+            loader: 'css-loader',
+            options: {
+              modules: true,
+              importLoaders: 1,
+              localIdentName: '[name][local]__[hash:base64:5]',
+            },
+          },
+        ],
       },
       {
         test: /\.jsx?$/,
