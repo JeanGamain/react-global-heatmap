@@ -1,0 +1,14 @@
+#dashboard {
+  border: 1px solid #ccc;
+  overflow: hidden;
+}
+
+#chart {
+  height: 200px;
+  width: 900px;
+}
+
+#control {
+  height: 50px;
+  width: 900px;
+}

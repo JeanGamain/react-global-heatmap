@@ -1,0 +1,96 @@
+html {
+  width: 100%;
+  background-color: #4285f4;
+}
+
+body {
+  font-family: 'Roboto', normal;
+  font-weight: 500;
+  padding: 20px;
+}
+
+h1 {
+  margin-top: 0px;
+}
+table {
+  border-spacing: 0px;
+}
+
+select {
+  width: 260px;
+}
+.googft-legend p {
+  font-weight:bold;
+  margin-top:0px;
+}
+
+.googft-legend div {
+  margin-bottom: 5px;
+}
+
+.section {
+  margin: auto;
+  background-color: #EEE;
+  box-shadow: 0px 2px 5px 0 rgba(0,0,0,.26);
+  padding: 22px;
+  min-width: 500px;
+  max-width: 900px;
+}
+
+
+#attribution {
+  color: #666;
+  width: 680px;
+  position: absolute;
+  top: 300px;
+  left: 1em;
+}
+
+
+#attribution a {
+  color: #666;
+}
+
+#googft-gviz-canvas {
+  height: 300px;
+  width: 680px;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+}
+
+.countryTags {
+  border-radius: 3px;
+  border: #CECECE 2px solid;
+  padding-left: 8px;
+  margin-left: 8px;
+  margin-top: 5px;
+}
+
+.countryTagsRemove {
+  font-weight: 400;
+  margin-left: 3px;
+  border-left: #AEAEAE 1px solid;
+  padding: 0px 5px;
+  cursor: pointer;
+}
+
+.googft-dot-icon {
+  margin-right:8px;
+}
+.googft-paddle-icon {
+  height:24px;
+  left:-8px;
+  margin-right:-8px;
+  position:relative;
+  vertical-align:middle;
+  width:24px;
+}
+.googft-legend-source {
+  margin-bottom:0px;
+  margin-top:8px;
+}
+.googft-legend-source a{
+  color:#666;
+  font-size:11px;
+}
