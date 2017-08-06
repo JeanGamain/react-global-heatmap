@@ -12,7 +12,7 @@ class GlobalHeatMap extends React.Component {
     this.state = {
       country: [],
       canRefresh: true,
-      dateRangeControlEnable: true,
+      dateRangeControl: false,
       dateRangeStart: '2000 Nov 1',
       dateRangeStop: '2013 Aug 1',
     };
@@ -26,7 +26,8 @@ class GlobalHeatMap extends React.Component {
     this.handleData = this.handleData.bind(this);
     this.selectCountry = this.selectCountry.bind(this);
     this.unselectCountry = this.unselectCountry.bind(this);
-    //this. = this..bind(this);
+    this.changeRangeStart = this.changeRangeStart.bind(this);
+    this.changeRangeStop = this.changeRangeStop.bind(this);
   }
 
   componentDidMount() {
@@ -63,9 +64,9 @@ class GlobalHeatMap extends React.Component {
       document.getElementById('chartRangeFilter_dashboard')
     );
 
-    let dateRangeControl = new google.visualization.ControlWrapper({
+    this.state.dateRangeControl = new google.visualization.ControlWrapper({
       'controlType': 'ChartRangeFilter',
-      'containerId': 'chartRangeFilter_control_div',
+      'containerId': 'chartRangeFilter_control',
       'options': {
         // Filter by the date axis.
         'filterColumnIndex': 0,
@@ -81,10 +82,11 @@ class GlobalHeatMap extends React.Component {
       // Initial range
       'state': {'range': {'start': new Date(1743, 1, 1), 'end': new Date(2013, 1, 1)}}
     });
+    this.setState(this.state);
 
     let chart = new google.visualization.ChartWrapper({
       'chartType': 'LineChart',
-      'containerId': 'chartRangeFilter_chart_div',
+      'containerId': 'chartRangeFilter_chart',
       'options': {
         // Use the same chart area width as the control for axis alignment.
         'legend': {position: 'none'},
@@ -92,19 +94,20 @@ class GlobalHeatMap extends React.Component {
         'hAxis': {'slantedText': true},
         'vAxis': {'viewWindow': {'min': -5, 'max': 35}},
       },
-      // Convert the first column from 'date' to 'string'.
       colors: ['#a52714', '#097138'],
     });
 
     let data = new google.visualization.DataTable();
     data.addColumn('date', 'Date');
     let c = 0;
+    let selectedCountry = [];
     this.state.country.map((country) => {
-      c += country.selected;
-      return (country.selected) ?
-        data.addColumn('number', country.name + ' temperature')
-        : '';
-      });
+      if (country.selected) {
+        c++;
+        selectedCountry.push(country);
+        data.addColumn('number', country.name + ' temperature');
+      }
+    });
 
     if (c === 0)
       data.addColumn('number', 'Temperature');
@@ -123,9 +126,9 @@ class GlobalHeatMap extends React.Component {
           new Date(response.rows[i][0])
         ];
         let j = i;
-        for (let k = 0; k < this.state.country.length; ++k) {
-          for (i = j; i < response.rows.length && response.rows[j][0] === response.rows[i][0] && response.rows[i][2] !== this.state.country[k].name; ++i);
-          if (i < response.rows.length && response.rows[i][2] === this.state.country[k].name && response.rows[j][0] === response.rows[i][0])
+        for (let k = 0; k < selectedCountry.length; ++k) {
+          for (i = j; i < response.rows.length && response.rows[j][0] === response.rows[i][0] && response.rows[i][2] !== selectedCountry[k].name; ++i);
+          if (i < response.rows.length && response.rows[i][2] === selectedCountry[k].name && response.rows[j][0] === response.rows[i][0])
             row.push((response.rows[i][1] === "NaN") ? undefined : response.rows[i][1]);
           else
             row.push(undefined);
@@ -138,7 +141,8 @@ class GlobalHeatMap extends React.Component {
       for (let i = 0; i < cleanRows.length; ++i) {
         for (let j = 1; j < cleanRows[i].length; ++j) {
           if (cleanRows[i][j] === undefined) {
-            for (let k = i + 1; k < this.state.country.length && cleanRows[k][j] === undefined; ++k);
+            let k = i + 1;
+            for (; k < selectedCountry.length && cleanRows[k][j] === undefined; ++k);
             if (k < cleanRows.length) {
               if (i !== 0) {
                 let diffDayStart = moment(cleanRows[i][0]).diff(moment(cleanRows[i - 1][0]), 'days') * -1;
@@ -153,14 +157,15 @@ class GlobalHeatMap extends React.Component {
 
     data.addRows(cleanRows);
 
-    dashboard.bind(dateRangeControl, chart);
+    dashboard.bind(this.state.dateRangeControl, chart);
     dashboard.draw(data);
-    google.visualization.events.addListener(dateRangeControl, 'statechange', function (e){
-      let start = moment(dateRangeControl.getState().range.start);
-      let end = moment(dateRangeControl.getState().range.end);
-      this.state.dateRangeStart = start.format('YYYY MMM D');
-      this.state.dateRangeStop = end.format('YYYY MMM D');
-      this.setState(this.state);
+    let my = this;
+    google.visualization.events.addListener(this.state.dateRangeControl, 'statechange', function (e){
+      let start = moment(my.state.dateRangeControl.getState().range.start);
+      let end = moment(my.state.dateRangeControl.getState().range.end);
+      my.state.dateRangeStart = start.format('YYYY MMM D');
+      my.state.dateRangeStop = end.format('YYYY MMM D');
+      my.setState(my.state);
     });
     this.state.canRefresh = true;
     this.setState(this.state);
@@ -194,7 +199,7 @@ class GlobalHeatMap extends React.Component {
   }
 
   getSqlDateRange() {
-    if (this.state.dateRangeControlEnable)
+    if (this.state.dateRangeControl === false)
       return '';
     return (
       "col0\x3e\x3e0 \x3e\x3d '" + moment(this.state.dateRangeStart).format('YYYY MMM D') + '\' AND ' +
@@ -203,11 +208,13 @@ class GlobalHeatMap extends React.Component {
   }
 
   getSqlCountrySelector() {
-    return (this.state.country.length === 0) ?  '' : (
-      ' Country IN (' +
-      this.state.country.map((country, i) => ("'" + country.name.replace("'","") + "'")).join(',')
-      + ') '
-    );
+    let s = [];
+    this.state.country.map(country => {
+      if (country.selected) {
+        s.push("'" + country.name.replace("'","") + "'");
+      }
+    });
+    return (s.length === 0) ?  '' : ' Country IN (' + s.join(',') + ') ';
   }
 
   refreshData() {
@@ -236,6 +243,16 @@ class GlobalHeatMap extends React.Component {
     this.setState(this.state);
   }
 
+  changeRangeStart(e) {
+    this.state.dateRangeStart = e.target.value;
+    this.setState(this.state);
+  }
+
+  changeRangeStop(e) {
+    this.state.dateRangeStop = e.target.value;
+    this.setState(this.state);
+  }
+
   render() {
 
     const tempetureRangeConfig = [
@@ -249,7 +266,6 @@ class GlobalHeatMap extends React.Component {
       { min: 32, max: 70, color: "#ff0000"}
     ];
 
-    //className="googft-legend-range"
     const tempetureRange = tempetureRangeConfig.map(range => (
       <div>
         <span className={styles.legendSwatch} style={{backgroundColor: range.color}}/>
@@ -271,9 +287,7 @@ class GlobalHeatMap extends React.Component {
     ));
 
     return (
-
       <div className={styles.section}>
-
         <h1>Global Temperatures by country from 1743 to 2013.</h1>
         <div id="googft-mapCanvas" className={styles.mapCanvas} />
         <input id="googft-legend-open" style={{display: 'none'}} type="button" value="Legend" />
@@ -287,11 +301,11 @@ class GlobalHeatMap extends React.Component {
 
         <div className={styles.controls}>
           <span id="dateRangeLabel">
-            From: <input id="dateRangeStart" className={styles.dateRange} type="text" defaultValue={this.state.dateRangeStart}/>
-            {' '}to <input className={styles.dateRange} id="dateRangeEnd" type="text" defaultValue={this.state.dateRangeStop}/>
+            From: <input id="dateRangeStart" className={styles.dateRange} type="text" value={this.state.dateRangeStart} onChange={this.changeRangeStart}/>
+            {' '}to <input className={styles.dateRange} id="dateRangeEnd" type="text" value={this.state.dateRangeStop} onChange={this.changeRangeStop}/>
           </span><br />
           <label for="countrySelector">
-            Country:
+            Country:{' '}
           </label>
           <select id="countrySelector" onChange={this.selectCountry} >
             <option value=""/>
@@ -308,12 +322,12 @@ class GlobalHeatMap extends React.Component {
           <table className="columns">
             <tr>
               <td>
-                <div className={styles.chart}/>
+                <div id="chartRangeFilter_chart" className={styles.chart}/>
               </td>
             </tr>
             <tr>
               <td>
-                <div className={styles.controlSection}/>
+                <div id="chartRangeFilter_control" className={styles.controlSection}/>
               </td>
             </tr>
           </table>
