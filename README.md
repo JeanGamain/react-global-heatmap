@@ -1,5 +1,9 @@
 # react-global-heatmap
 * Preview of global temperatures by country from 1743 to 2013.
+*  - react/webpack
+*  - google chart/map
+
+![alt text](http://url/to/img.png)
 
 # setup
 * `git clone git@github.com:JeanGamain/react-global-heatmap.git`
@@ -9,3 +13,4 @@
 * visit `http://localhost:8080/`
 
 
+jean.gamain@epitech.eu

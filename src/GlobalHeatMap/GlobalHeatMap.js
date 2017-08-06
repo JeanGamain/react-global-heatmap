@@ -76,7 +76,6 @@ class GlobalHeatMap extends React.Component {
             'chartArea': {'width': '90%'},
 
           },
-          // 1 month in milliseconds = 24 * 60 * 60 * 1000 = 2 628 002 880
         }
       },
       // Initial range
@@ -84,6 +83,7 @@ class GlobalHeatMap extends React.Component {
     });
     this.setState(this.state);
 
+    // line chart initialisation
     let chart = new google.visualization.ChartWrapper({
       'chartType': 'LineChart',
       'containerId': 'chartRangeFilter_chart',
@@ -126,7 +126,7 @@ class GlobalHeatMap extends React.Component {
           new Date(response.rows[i][0])
         ];
         let j = i;
-        for (let k = 0; k < selectedCountry.length; ++k) {
+        for (let k = 0; k < selectedCountry.length; ++k) { // reformat the response array for google chart and define missing point NaN.
           for (i = j; i < response.rows.length && response.rows[j][0] === response.rows[i][0] && response.rows[i][2] !== selectedCountry[k].name; ++i);
           if (i < response.rows.length && response.rows[i][2] === selectedCountry[k].name && response.rows[j][0] === response.rows[i][0])
             row.push((response.rows[i][1] === "NaN") ? undefined : response.rows[i][1]);
@@ -136,15 +136,15 @@ class GlobalHeatMap extends React.Component {
         cleanRows.push(row);
       }
     }
-    // point predict
+    // missing temperature point prediction
     if (c != 0) {
       for (let i = 0; i < cleanRows.length; ++i) {
-        for (let j = 1; j < cleanRows[i].length; ++j) {
+        for (let j = 1; j < cleanRows[i].length; ++j) { // find fist/last point around the missing point
           if (cleanRows[i][j] === undefined) {
             let k = i + 1;
             for (; k < selectedCountry.length && cleanRows[k][j] === undefined; ++k);
             if (k < cleanRows.length) {
-              if (i !== 0) {
+              if (i !== 0) { // calc
                 let diffDayStart = moment(cleanRows[i][0]).diff(moment(cleanRows[i - 1][0]), 'days') * -1;
                 let diffDayEnd = moment(cleanRows[i][0]).diff(moment(cleanRows[k][0]), 'days');
                 cleanRows[i][j] = (cleanRows[i - 1][j] * diffDayStart + cleanRows[k][j] * diffDayEnd) / (diffDayStart + diffDayEnd);
